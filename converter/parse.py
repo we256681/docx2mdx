@@ -33,7 +33,7 @@ def read_document(docx_path):
 
 
 def parse_media_url(vals):
-    '''Ensure that the media link is correctly formatted 
+    '''Ensure that the media link is correctly formatted
     and outputs are always saved to media directory.
     '''
     if 'media' in vals:
@@ -153,12 +153,12 @@ def parse_layer_information(all_text):
 
     # Define the keys for layer data and the corresponding lists of parsed values.
     # This structure helps in iterating and assigning values to each layer's dictionary.
-    out_names = ['layer_name', 'stacCol', 'layer_id', 'layer_description', 'units', 
+    out_names = ['layer_name', 'stacCol', 'layer_id', 'layer_description', 'units',
                  'color_ramp_description', 'color_stops', 'data_format','projection',
                  'legend_minimum','legend_maximum','legend_type','colormap_name',
                  'resampling','rescale_min','rescale_max']
     out_data = [layer_name, stacCol, layer_id, layer_description, unit,
-                 color_ramp_description, final_color_groups, data_format, projection, 
+                 color_ramp_description, final_color_groups, data_format, projection,
                  legend_min, legend_max, legend_type, colormap_name,
                  resampling, rescale_min, rescale_max]
 
@@ -190,7 +190,7 @@ def table_0_info(row, header, extracted_data):
     if header == "media":
         all_text = parse_media_alt_text(row.cells[1].text.strip()) # Extract alt text, author, etc.
         vals = parse_media_url(row.cells[1].text.strip().split("\n")[0]) # Extract and format the main media URL.
-        
+
         if header not in extracted_data:
             extracted_data[header] = []
 
@@ -231,7 +231,7 @@ def parse_table_value_content(row,header,table_0,table_1):
     like content source, temporal extent, etc., often formatted as "Value: ...".
     """
     all_text = check_value_string_length(row.cells[1].text.strip())
-    
+
     # Regex to extract content after "Value: " (case-insensitive).
     value_regex = r'(?<=Value:\s)(.*)'
 
@@ -278,7 +278,7 @@ def parse_additional_table_info(row, header, table_2):
     # Regex to capture content after "Header: " and "Value: ", allowing for newlines between them.
     # re.DOTALL makes '.' match newlines as well.
     match = re.search(r'Header:\s*(.*?)\s*\n+\s*Value:\s*(.*)', all_text, re.DOTALL)
-    
+
     if match:
         header_ = match.group(1).strip() # Captured header content.
         value = match.group(2).strip()   # Captured value content.
@@ -293,29 +293,37 @@ def extract_table_info_from_docx(doc):
     table_0 = {} # Stores general metadata, media, tags, layers.
     table_1 = {} # Stores specific dataset attributes (e.g., temporal extent, source).
     table_2 = {} # Stores additional structured information.
-    
+
     # Process lists (bulleted or numbered)
     # Iterate through all tables in the document.
     for iTable,table in enumerate(doc.tables):
         # Iterate through all rows in the current table.
         for iRow,row in enumerate(table.rows):
+            # Check if row has at least one cell
+            if len(row.cells) == 0:
+                continue
+
             # Get header from the first cell of the row, convert to lowercase, and take the first line.
             header = row.cells[0].text.strip().lower().split("\n")[0]
-            
-            # Skip rows where both header and the second cell's content are empty.
-            if len(header) == 0 and len(row.cells[1].text.strip()) == 0:
+
+            # Skip rows where header is empty and (no second cell OR second cell is empty)
+            if len(header) == 0 and (len(row.cells) < 2 or len(row.cells[1].text.strip()) == 0):
                 continue
             # If header is empty but there's content, it's an invalid format.
             elif len(header) == 0:
                 raise ValueError("Header is empty. Please check the template document and ensure all expected headers are present and not empty.")
-            # Process valid rows based on table index.
-            else:
+            # Process valid rows based on table index, but only if they have at least 2 cells
+            elif len(row.cells) >= 2:
                 if iTable == 0: # First table (general info, media, tags, layers)
                     table_0 = table_0_info(row, header, table_0)
                 elif iTable == 1: # Second table (dataset attributes)
                     table_1 = parse_table_value_content(row,header,table_0,table_1)
                 elif iTable ==2: # Third table (additional info)
                     table_2 = parse_additional_table_info(row, header, table_2)
+            else:
+                # Skip rows with only one cell as they might be headers or separators
+                print(f"Пропуск строки с одной ячейкой в таблице {iTable}: '{header}'")
+                continue
     return table_0, table_1, table_2
 
 
